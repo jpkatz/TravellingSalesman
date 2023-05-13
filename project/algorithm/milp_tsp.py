@@ -114,7 +114,6 @@ def build_objective(model, graph, x_ij):
     for first_city, connections in graph.items():
         for second_city, distance in connections.items():
             term = distance * x_ij[first_city, second_city]
-            print(term)
             obj_terms.append(term)
     model.setObjective(popt.quicksum(obj_terms), "minimize")
 
