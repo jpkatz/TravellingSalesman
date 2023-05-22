@@ -12,9 +12,53 @@ class SHP:
 
     def solve_mip(self):
         self.model.optimize()
-        for v in self.model.getVars():
-            if self.model.getVal(v) > 0.5:
-                print("%s: %d" % (v, round(self.model.getVal(v))))
+        self.print_path()
+
+    def print_path(self):
+        for starting_name, starting_var in self.ei.items():
+            if self.model.getVal(starting_var) > 0.5:
+                print('The starting position: {}'.format(starting_name))
+                break
+        for ending_name, ending_var in self.si.items():
+            if self.model.getVal(ending_var) > 0.5:
+                print('The ending position: {}'.format(ending_name))
+                break
+        print('---')
+        print('The path is as follows:')
+        total_path_len = len(self.graph.keys()) - 1
+        keep_traversing = True
+        len_path = 0
+        initial_source = starting_name
+        source = initial_source
+        max_iter = total_path_len + 1
+        iter = 0
+        while keep_traversing:
+            print('Current position: {}'.format(source))
+            for destination in self.graph[source].keys():
+                mip_variable = self.x_ij[source, destination]
+                variable_value = self.model.getVal(mip_variable)
+                if variable_value > 0.5:
+                    source = destination
+                    len_path += 1
+                    
+                    break
+            else:
+                if source != ending_name:
+                    print('Unable to find connecting city: {}'
+                        .format(source))
+                else:
+                    print('---')
+                    print('Completed, Ending city: {}'.format(ending_name))
+                keep_traversing = False
+            
+            iter += 1
+            if iter > max_iter:
+                print('Exceeded max iterations')
+                break
+
+        if len_path < total_path_len:
+            print('The path is not complete it seems: path {} vs total {}'
+                  .format(len_path, total_path_len))
 
 
     def build_mip(self):
