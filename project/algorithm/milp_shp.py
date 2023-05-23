@@ -10,6 +10,19 @@ class SHP:
         self.si = {}
         self.ei = {}
 
+    def solve_n_mip(self, n):
+        self.model.hideOutput()
+        self.solve_mip()
+        for iter in range(n):
+           starting_var = [x for x in self.ei.values() if self.model.getVal(x) > 0.5][0]
+           ending_var = [x for x in self.si.values() if self.model.getVal(x) > 0.5][0]
+           self.model.freeTransform()
+           self.model.addCons(starting_var + ending_var <= 1)
+           self.model.freeTransform()
+           self.solve_mip()
+
+
+
     def solve_mip(self):
         self.model.optimize()
         self.print_path()
@@ -126,4 +139,4 @@ if __name__ == '__main__':
     test_problem = json.load(f)
     shp = SHP(test_problem)
     shp.build_mip()
-    shp.solve_mip()
+    shp.solve_n_mip(2)
