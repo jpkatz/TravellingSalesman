@@ -9,18 +9,20 @@ class SHP:
         self.x_ij = {}
         self.si = {}
         self.ei = {}
+        self.ui = {}
+        self.N = len(self.graph.keys())
 
     def solve_n_mip(self, n):
         self.model.hideOutput()
         self.solve_mip()
-        for iter in range(n):
+        for iter in range(n-1):
            starting_var = [x for x in self.ei.values() if self.model.getVal(x) > 0.5][0]
            ending_var = [x for x in self.si.values() if self.model.getVal(x) > 0.5][0]
            self.model.freeTransform()
+           # TODO: Add constraint that reverse is not valid
            self.model.addCons(starting_var + ending_var <= 1)
            self.model.freeTransform()
            self.solve_mip()
-
 
 
     def solve_mip(self):
@@ -28,14 +30,17 @@ class SHP:
         self.print_path()
 
     def print_path(self):
-        for starting_name, starting_var in self.ei.items():
+        print('Status:', self.model.getStatus())
+        for starting_name, starting_var in self.si.items():
             if self.model.getVal(starting_var) > 0.5:
                 print('The starting position: {}'.format(starting_name))
                 break
-        for ending_name, ending_var in self.si.items():
+                
+        for ending_name, ending_var in self.ei.items():
             if self.model.getVal(ending_var) > 0.5:
                 print('The ending position: {}'.format(ending_name))
                 break
+                
         print('---')
         print('The path is as follows:')
         total_path_len = len(self.graph.keys()) - 1
@@ -72,6 +77,9 @@ class SHP:
         if len_path < total_path_len:
             print('The path is not complete it seems: path {} vs total {}'
                   .format(len_path, total_path_len))
+        for v in self.model.getVars():
+            if self.model.getVal(v) > 0.5:
+                print("%s: %d" % (v, round(self.model.getVal(v))))
 
 
     def build_mip(self):
@@ -99,6 +107,11 @@ class SHP:
             self.ei[city] = self.model.addVar(vtype='B',
                                               name='e_(%s)' % (city)
                                               )
+            self.ui[city] = self.model.addVar(vtype='C',
+                                              ub=self.N,
+                                              lb=0,
+                                              name='u_(%s)' % (city)
+                                              )
 
 
     def build_constraints(self):
@@ -108,21 +121,35 @@ class SHP:
             for city_j in connections.keys():
                 term = self.x_ij[city_i, city_j]
                 terms.append(term)
-            self.model.addCons(popt.quicksum(terms) == 1 - self.si[city_i])
+            self.model.addCons(popt.quicksum(terms) == 1 - self.ei[city_i])
 
-        # one entrance to city
+        # one entrance to city - assuming symmetric
         for city_i, connections in self.graph.items():
             terms = []
             for city_j in connections.keys():
                 term = self.x_ij[city_j, city_i]
                 terms.append(term)
-            self.model.addCons(popt.quicksum(terms) == 1 - self.ei[city_i])
+            self.model.addCons(popt.quicksum(terms) == 1 - self.si[city_i])
 
-        # one city doesnt have exit
+        # one city is starting
         self.model.addCons(popt.quicksum(self.si[city] for city in self.graph.keys()) == 1)
 
-        # one city doesnt have entrance
+        # one city is ending
         self.model.addCons(popt.quicksum(self.ei[city] for city in self.graph.keys()) == 1)
+
+        # subtour elimination :( - required modification since path not tour
+        N = self.N
+        for city in self.graph.keys():
+            ui = self.ui[city]
+            self.model.addCons(ui <= N * (1-self.si[city]) + self.si[city])
+            self.model.addCons(ui >= 2 - self.si[city])
+            self.model.addCons(ui >= N * self.ei[city])
+        
+        for city_i, connections in self.graph.items():
+            for city_j in connections.keys():
+                lhs = self.ui[city_i] - self.ui[city_j] + (N-1) * self.x_ij[city_i, city_j] - N * self.ei[city_i]
+                rhs = N - 2
+                self.model.addCons(lhs <= rhs)        
 
     def build_objective(self):
         obj_terms = []
@@ -139,4 +166,5 @@ if __name__ == '__main__':
     test_problem = json.load(f)
     shp = SHP(test_problem)
     shp.build_mip()
-    shp.solve_n_mip(2)
+    # shp.solve_mip()
+    shp.solve_n_mip(3)
