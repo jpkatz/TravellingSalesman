@@ -17,6 +17,7 @@ class TspConsHandler(popt.Conshdlr):
         len_local_cycle = 0
         initial_source = next(iter(self.nodes.keys()))
         source = initial_source
+        print(solution)
         while keep_traversing:
             for destination in self.nodes[source].keys():
                 mip_variable = xij[source, destination]
@@ -46,6 +47,7 @@ class TspConsHandler(popt.Conshdlr):
         if subtours:
             x = self.variables
             for subset in subtours:
+                # TODO: Add cut
                 # self.model.addCons(popt.quicksum(x[i, j] for (i, j) in pairs(subset))
                 #                    <= len(subset) − 1)
                 # print("cut: len (%s) <= %s" % (subset, len(subset) − 1))
@@ -68,9 +70,6 @@ class TSP:
 
     def solve_mip(self):
         self.model.optimize()
-        for v in self.model.getVars():
-            if self.model.getVal(v) > 0.5:
-                print("%s: %d" % (v, round(self.model.getVal(v))))
 
 
     def build_mip(self):
@@ -81,7 +80,6 @@ class TSP:
         constraint_hanlder = TspConsHandler(self.x_ij)
         constraint_hanlder.add_node_names(self.graph)
         self.model.includeConshdlr(constraint_hanlder, 'TSP', 'TSP Subtour Elimination', needscons=False)
-
 
 
     def generate_model(self):
@@ -122,6 +120,16 @@ class TSP:
                 term = distance * self.x_ij[first_city, second_city]
                 obj_terms.append(term)
         self.model.setObjective(popt.quicksum(obj_terms), "minimize")
+
+    def get_dict_solution(self):
+        tour = {}
+        for connection, mip_var in self.x_ij.items():
+            if self.model.getVal(mip_var) > 0.5:
+                print("%s: %d" % (mip_var, round(self.model.getVal(mip_var))))
+                source = connection[0]
+                destination = connection[1]
+                tour[source] = destination
+        return tour
 
 
 if __name__ == '__main__':
